@@ -1,1 +1,1 @@
-# ARIA — Automated Radiology Intelligence Agent
+# LLM Skill Files for MIST (and other upcoming tools)
