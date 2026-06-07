@@ -14,9 +14,10 @@ MIST automates the full segmentation pipeline:
 2. **Preprocess** (`mist_preprocess`) — reorients, crops, resamples, and normalizes NIfTI images into NumPy arrays.
 3. **Train** (`mist_train`) — five-fold cross-validation using PyTorch DDP; runs evaluation on the held-out fold after each fold.
 4. **Predict** (`mist_predict`) — sliding-window inference with optional TTA and postprocessing.
-5. **Evaluate** (`mist_evaluate`) — computes per-patient metrics against ground truth.
-6. **Postprocess** (`mist_postprocess`) — applies strategy-based morphological transforms.
-7. **Rank** (`mist_rank`) — BraTS-style ranking of N evaluation result CSVs.
+5. **Ensemble** (`mist_ensemble`) — combines discrete NIfTI predictions from multiple models via STAPLE or majority vote.
+6. **Evaluate** (`mist_evaluate`) — computes per-patient metrics against ground truth.
+7. **Postprocess** (`mist_postprocess`) — applies strategy-based morphological transforms.
+8. **Rank** (`mist_rank`) — BraTS-style ranking of N evaluation result CSVs.
 
 Run the full pipeline in one command with `mist_run_all`.
 
@@ -94,9 +95,9 @@ Accepts all flags from `mist_analyze`, `mist_preprocess`, and `mist_train`.
 --composite-loss-weighting  Schedule for composite losses: constant, linear, cosine
 --epochs                  Epochs per fold (default: 1000)
 --batch-size-per-gpu      Batch size per GPU (default: 2)
---learning-rate           Learning rate (default: 0.001)
+--learning-rate           Learning rate (overrides config.json; default comes from config)
 --lr-scheduler            LR scheduler: cosine, polynomial, constant (default: cosine)
---warmup-epochs           Linear warmup epochs (default: 20)
+--warmup-epochs           Linear warmup epochs (overrides config.json; default comes from config)
 --optimizer               Optimizer: adamw, adam, sgd (default: adamw)
 --l2-penalty              Weight decay (default: 0.0001)
 --folds                   Which folds to run (default: all)
@@ -144,9 +145,24 @@ Accepts all flags from `mist_analyze`, `mist_preprocess`, and `mist_train`.
 --output-csv                Path for summary ranking CSV (required)
 --names                     Friendly labels, one per CSV (default: file stems)
 --output-detailed-csv       Path for per-metric breakdown CSV
+--significance-csv          Path for pairwise Wilcoxon p-value matrix CSV (optional)
 --metric-direction-overrides  JSON file mapping metric column → "higher"/"lower"
 --id-column                 Patient ID column name (default: id)
 ```
+
+### `mist_ensemble`
+```
+--predictions          Two or more directories of NIfTI predictions, one per patient (required)
+--output               Directory for consensus predictions (required)
+--ensemble-backend     staple (default) or majority_vote
+```
+
+Combines post-argmax label maps from separately trained models into a single consensus segmentation. All input directories must contain the same set of `<patient_id>.nii.gz` files. Patient IDs are validated upfront; per-patient errors are accumulated without crashing the run. Works for both binary (single foreground class) and multi-class label maps.
+
+| Backend | Algorithm | Notes |
+|---------|-----------|-------|
+| `staple` | MultiLabelSTAPLE (EM) | Principled — estimates per-model sensitivity/specificity. Default. |
+| `majority_vote` | LabelVoting | Faster and simpler. Ties resolved to background (label 0). |
 
 ### `mist_average_weights`
 ```
@@ -177,7 +193,7 @@ Accepts all flags from `mist_analyze`, `mist_preprocess`, and `mist_train`.
 
 ```json
 {
-  "mist_version": "2.0.0rc0",
+  "mist_version": "2.0.1-rc",
   "dataset_info": { "task": "...", "modality": "mr", "images": [...], "labels": [...] },
   "spatial_config": {
     "patch_size": [128, 128, 128],
@@ -395,6 +411,15 @@ mist_predict --models-dir /path/to/results/models \
              --device cpu
 ```
 
+**Ensemble predictions from models trained with different loss functions:**
+```bash
+mist_ensemble --predictions /path/to/pred_dice \
+                            /path/to/pred_cldice \
+                            /path/to/pred_hdos \
+              --output /path/to/ensemble_output \
+              --ensemble-backend staple
+```
+
 **Rank two postprocessing strategies:**
 ```bash
 mist_rank --results strategy_a_results.csv strategy_b_results.csv \
@@ -547,7 +572,7 @@ mist/
     conversion_tools/   # mist_convert_msd and mist_convert_csv logic
     data_loading/       # DALI pipeline and augmentation
     evaluation/         # Metrics, evaluator, ranking
-    inference/          # Sliding window, TTA, ensemble, inference runners
+    inference/          # Sliding window, TTA, softmax ensemblers, label ensemblers, inference runners
     loss_functions/     # Loss registry, base class, all loss implementations
     models/             # Model registry and all architecture implementations
     postprocessing/     # Transform registry, postprocessor
