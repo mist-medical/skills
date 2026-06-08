@@ -35,6 +35,7 @@ mist_autoresearch postprocessing \
   --patience 10 \
   --alpha 0.05 \
   --min-iterations 5 \
+  --additional-prompt context.md \
   --model claude-opus-4-8
 ```
 
@@ -46,6 +47,14 @@ mist_autoresearch postprocessing \
 | `--predictions` | `mist_predict` output | Directory of baseline NIfTI predictions |
 | `--test-csv` | Your data split | CSV with `id` and `mask` columns |
 | `--output` | You choose | Root directory for the run |
+
+**Other flags:**
+
+| Flag | Default | Description |
+|---|---|---|
+| `--additional-prompt` | *(none)* | Path to a Markdown file injected into every proposal prompt as `## Additional Context`. Use for dataset notes, evaluation criteria, or transform ideas. |
+| `--model` | *(Claude Code default)* | Model name forwarded to `claude --model` |
+| `--num-workers` | `1` | Parallel workers for postprocessing and evaluation |
 
 **Stopping criteria flags:**
 
