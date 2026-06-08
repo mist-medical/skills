@@ -158,9 +158,10 @@ mist_autoresearch/
 
 **Key design decisions:**
 - The loop is **sequential** — each iteration's proposal depends on what the LLM learned from all prior iterations.
+- Proposals are made via `claude -p` subprocess (Claude Code CLI), so no separate Anthropic API key is needed.
 - Ranking uses `mist.evaluation.ranking.rank_results` and `compute_pairwise_significance` imported directly (pure Python, no subprocess needed).
 - Postprocessing uses `mist_postprocess` via **subprocess** for process isolation (crashes don't kill the orchestrator, progress bars work, file I/O is clean).
-- The Anthropic client is injectable (`client=` kwarg on `PostprocessingResearcher`) for testing and custom configurations.
+- Resume is automatic: if `history.json` exists in `--output`, the loop skips completed iterations and continues from the next one.
 
 ---
 
@@ -212,10 +213,24 @@ Then add a new subcommand in `cli.py`.
 
 ---
 
+## Resuming an Interrupted Run
+
+Re-run the exact same command pointing to the same `--output` directory. The loop detects the existing `history.json` and resumes automatically:
+
+1. Completed iteration results are loaded from `iteration_NNN/postprocess_results.csv`.
+2. Rankings and best-tracking state are recomputed from those results.
+3. The loop continues from the next iteration number; the notebook is appended to, not overwritten.
+
+Changing `--num-workers` between runs is safe — it only affects speed. If the baseline CSV or any iteration CSV is missing, `run()` raises `FileNotFoundError`.
+
+---
+
 ## Relationship to MIST
 
 `mist-autoresearch` is a separate repo that sits on top of MIST. It depends on:
 - `mist-medical` (for `mist_postprocess` CLI and `mist.evaluation.ranking`)
-- `anthropic` (for LLM strategy proposals)
+- `pandas`
+
+Strategy proposals are made via the Claude Code CLI (`claude -p`) — no separate Anthropic API key is required.
 
 The repo lives at `/Users/adriancelaya/Documents/GitHub/mist-autoresearch/`.
