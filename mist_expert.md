@@ -220,6 +220,7 @@ Combines post-argmax label maps from separately trained models into a single con
     "l2_penalty": 0.0001,
     "grad_clip_norm": 1.0,
     "loss": { "name": "dice_ce", "composite_loss_weighting": null },
+    "amp": true,
     "dali_foreground_prob": 0.6,
     "augmentation": {
       "enabled": true,
@@ -232,7 +233,7 @@ Combines post-argmax label maps from separately trained models into a single con
     }
   },
   "inference": {
-    "inferer": { "name": "sliding_window", "params": { "patch_blend_mode": "gaussian", "patch_overlap": 0.5 } },
+    "inferer": { "name": "sliding_window", "params": { "patch_blend_mode": "gaussian", "patch_overlap": 0.5, "sw_batch_size": 4 } },
     "ensemble": { "strategy": "mean" },
     "tta": { "enabled": true, "strategy": "all_flips" }
   },
@@ -245,6 +246,8 @@ Combines post-argmax label maps from separately trained models into a single con
 Key rules:
 - `spatial_config.patch_size` and `target_spacing` are the single source of truth — edit here to override analysis.
 - `patch_overlap` must be in `[0, 1)` — `1.0` is invalid.
+- `training.amp` enables BF16 automatic mixed precision (default: `true`). BF16 requires an NVIDIA Ampere or newer GPU (A100, RTX 30xx, H100). On pre-Ampere cards (V100, T4, RTX 20xx) set `"amp": false` — those GPUs do not support BF16 and training will error or silently fall back to FP32 depending on driver version. AMP is propagated to validation, fold testing, and `mist_predict` inference automatically.
+- `inference.inferer.params.sw_batch_size` controls how many sliding-window patches are processed per forward pass (default: `2 × batch_size_per_gpu`). Increase for higher GPU utilisation on high-VRAM cards; decrease if patch batches cause OOM during inference.
 - `grad_clip_norm` is not exposed as a CLI flag; edit `config.json` directly.
 - `training.hardware.master_port` defaults to `12345`; change it when running multiple concurrent MIST jobs on the same machine to avoid port conflicts.
 - `training.hardware.num_cpu_workers` controls DALI's internal CPU thread count (default: 8); not the same as `--num-workers-*` flags.
