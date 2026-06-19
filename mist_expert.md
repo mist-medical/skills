@@ -103,7 +103,7 @@ Accepts all flags from `mist_analyze`, `mist_preprocess`, and `mist_train`.
 --folds                   Which folds to run (default: all)
 --resume                  Resume from last checkpoint
 --pretrained-weights      Path to pretrained checkpoint for encoder init
---pretrained-config       Path to source config.json (required with --pretrained-weights)
+--pretrained-config       Path to source config.json (recommended with --pretrained-weights; enables encoder-compatibility validation)
 --input-channel-strategy  Handle in_channels mismatch: average, first, skip (default: average)
 --num-workers-evaluate    Parallel workers for post-fold evaluation (default: 1)
 --overwrite               Overwrite existing results
@@ -502,7 +502,7 @@ mist_train --results /path/to/results --numpy /path/to/numpy \
            --pretrained-config /path/to/source/config.json
 ```
 
-`--pretrained-config` is always required — MIST uses it to validate encoder compatibility before loading any weights.
+`--pretrained-config` is strongly recommended — MIST uses it to validate encoder compatibility before training. If omitted, MIST warns and skips that check; weights still load, with any incompatible tensors skipped (retaining random init).
 
 If `in_channels` differs between source and target, `--input-channel-strategy` controls resolution:
 

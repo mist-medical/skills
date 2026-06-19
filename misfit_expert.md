@@ -115,12 +115,13 @@ misfit_train --index   /data/index.parquet \
 | `--warmup-epochs N` | 20 | Linear warmup epochs |
 | `--gradient-accumulation-steps N` | 1 | Accumulate gradients over N batches |
 | `--bucket-cap-mb MB` | 200 | DDP all-reduce bucket size (vs PyTorch default 25) |
-| `--amp-dtype {fp16,bf16}` | `fp16` | AMP dtype (`bf16` requires Ampere+, more stable) |
 | `--seed N` | 42 | Random seed |
 | `--resume` | — | Resume from checkpoint |
 | `--overwrite` | — | Discard existing run and start fresh |
 
 `--resume` and `--overwrite` are mutually exclusive. If neither is passed and `config.json` exists, `misfit_train` refuses to run.
+
+AMP is **BF16-only and always on** during training — there is no `--amp-dtype` flag. BF16 has float32's dynamic range, so no GradScaler is used. To turn AMP off, set `"amp": false` in `config.json` and restart with `--resume` (requires an Ampere+ GPU: A100, H100, RTX 30xx+).
 
 ### Output structure
 
@@ -135,9 +136,9 @@ results/
 
 ### Immutable vs. mutable parameters (on resume)
 
-**Immutable (hard error on change):** `model.name`, `model.patch_size`, `model.mask_patch_size`
+**Immutable (hard error on change):** `model.architecture`, `model.patch_size`, `model.mask_patch_size`
 
-**Mutable (warning only):** `epochs`, `learning_rate`, `optimizer`, `loss`, `amp_dtype`, etc.
+**Mutable (warning only):** `epochs`, `learning_rate`, `optimizer`, `loss`, etc.
 
 ---
 
@@ -277,11 +278,13 @@ misfit_embed_train --input      /data/train_manifest.csv \
 
 ### Model variants
 
-| Variant | `--model` | `feature_size` | Encoder params (approx.) |
-|---|---|---|---|
-| Small | `swinunetr-small` | 24 | ~28M |
-| Base | `swinunetr-base` | 48 | ~62M |
-| Large | `swinunetr-large` | 96 | ~197M |
+| Variant | `--model` | `feature_size` | Encoder params | Full MAE params |
+|---|---|---|---|---|
+| Small | `swinunetr-small` | 24 | ~4.8M | ~7.2M |
+| Base | `swinunetr-base` | 48 | ~18.6M | ~27.8M |
+| Large | `swinunetr-large` | 96 | ~73.9M | ~110.3M |
+
+"Encoder params" is the `swinViT` backbone transferred to MIST (`encoder_weights.pt`); "Full MAE params" additionally includes the lightweight conv decoder and spacing embedding used only during pretraining.
 
 ---
 
@@ -311,8 +314,9 @@ misfit_embed_train --input      /data/train_manifest.csv \
     "warmup_epochs": 20,
     "loss": "normalized_masked_mse",
     "amp": true,
-    "amp_dtype": "fp16",
-    "seed": 42
+    "seed": 42,
+    "gradient_accumulation_steps": 1,
+    "bucket_cap_mb": 200
   },
   "evaluation": {
     "masked_mae": {},
@@ -344,7 +348,7 @@ This allows CT (Hounsfield units) and MRI (arbitrary units) to be mixed in the s
 |---|---|---|
 | `normalized_masked_mse` | **Default** | Per-patch variance normalization before MSE. Recommended for CT+MRI mixed training. |
 | `masked_mse` | — | Standard MSE on masked voxels only. |
-| `masked_l1` / `masked_mae` | — | MAE on masked voxels. More robust to intensity outliers. |
+| `masked_l1` | — | Mean absolute error on masked voxels. More robust to intensity outliers. |
 
 `normalized_masked_mse` normalizes each 3D patch's target to zero mean/unit variance before computing MSE. This prevents high-contrast regions (CT bone) from dominating the gradient signal and equalizes loss scale across modalities.
 
@@ -359,8 +363,9 @@ This allows CT (Hounsfield units) and MRI (arbitrary units) to be mixed in the s
 All schedulers support linear warmup via `--warmup-epochs`. Warmup ≥ 20 epochs is recommended for SwinUNETR-V2 — skipping can cause early instability.
 
 **AMP notes**:
-- `fp16`: Works on all CUDA GPUs. Uses GradScaler. Optimizer epsilon is 1e-4 (vs 1e-8) to compensate for narrower dynamic range.
-- `bf16`: Requires Ampere+ (A100, H100, RTX 30xx+). No GradScaler needed. Same dynamic range as float32. More numerically stable for long runs.
+- AMP is BF16-only and always enabled during training (`torch.amp.autocast("cuda", dtype=torch.bfloat16)`). There is no `--amp-dtype` flag and no fp16 path.
+- Requires Ampere+ (A100, H100, RTX 30xx+). BF16 has float32's dynamic range, so no GradScaler is used and the optimizer epsilon is the standard `1e-8` (`tc.NO_AMP_EPS`).
+- Disable by setting `"amp": false` in `config.json` and restarting with `--resume`; the same flag is honored by `misfit_evaluate` and `misfit_inspect`.
 
 ---
 
