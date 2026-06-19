@@ -1,4 +1,4 @@
-# LLM Skill Files for MIST (and other upcoming tools)
+# LLM Skill Files for the MIST Ecosystem
 
 This repository contains skill files for use with Claude Code. Each skill file gives Claude deep, structured knowledge about a specific tool or framework so it can answer questions, debug issues, and guide workflows without needing to re-read source code or documentation each time.
 
@@ -7,6 +7,8 @@ This repository contains skill files for use with Claude Code. Each skill file g
 | File | Tool | Description |
 |------|------|-------------|
 | [`mist_expert.md`](mist_expert.md) | [MIST](https://github.com/mist-medical/MIST) | Expert assistant for the MIST 3D medical image segmentation framework |
+| [`misfit_expert.md`](misfit_expert.md) | [MISFIT](https://github.com/mist-medical/MISFIT) | Expert assistant for the MISFIT medical imaging foundation-model pretraining toolkit |
+| [`mist_autoresearch_expert.md`](mist_autoresearch_expert.md) | [mist-autoresearch](https://github.com/mist-medical/mist-autoresearch) | Expert assistant for the LLM-driven autoresearch loops built on MIST |
 
 ## Usage
 
