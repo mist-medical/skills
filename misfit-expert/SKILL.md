@@ -176,7 +176,7 @@ results/
 
 ## Stage 3 — Evaluation (`misfit_evaluate`)
 
-Computes reconstruction metrics (MAE, MSE, PSNR, SSIM) on masked patches and
+Computes masked reconstruction metrics **in the training loss's space** and
 writes a per-volume CSV. Defaults to `val` split.
 
 ```console
@@ -186,16 +186,35 @@ misfit_evaluate --checkpoint /runs/exp1/models/best_model.pt \
                 --output-csv /runs/exp1/eval_results.csv
 ```
 
-Output CSV has per-volume rows plus five summary rows (Mean, Std,
-25th/Median/75th percentile). All metrics operate on z-score normalized
-intensities.
+Key behaviour:
 
-| Metric        | Direction        |
-| ------------- | ---------------- |
-| `masked_mae`  | Lower is better  |
-| `masked_mse`  | Lower is better  |
-| `masked_psnr` | Higher is better |
-| `ssim`        | Higher is better |
+- **Metric space.** When the run used `normalized_masked_mse`, the target is
+  normalised per `mask_patch_size` cube (exactly as the loss does), so
+  `masked_mse` is directly comparable to the run's `best_val_loss`. Other losses
+  keep the whole-volume z-score target.
+- **Foreground crop.** Each volume is cropped to its index `fg_*` bbox before
+  tiling, matching `MISFITDataset`.
+- **Deterministic.** The mask for tile _i_ is drawn from `--seed + i` (default
+  seed 42) — repeat runs are bit-identical.
+- **Naive baseline.** Because a per-region-normalised error is ≈ 1.0 for any
+  constant predictor, every metric also gets `<metric>_naive` (impute masked
+  voxels with the visible-region mean) and `<metric>_skill` (`1 - model/naive`
+  for lower-is-better, `model - naive` for higher-is-better; **positive = the
+  encoder beats trivial**). A console `model | naive | verdict` summary is
+  printed too. `_skill` is the robust "did pretraining work" number.
+
+| Metric        | Direction        | Notes                                      |
+| ------------- | ---------------- | ------------------------------------------ |
+| `masked_mae`  | Lower is better  | default                                    |
+| `masked_mse`  | Lower is better  | default; the `normalized_masked_mse` value |
+| `masked_psnr` | Higher is better | default                                    |
+| `ssim`        | Higher is better | **opt-in** via `--metrics ssim`            |
+
+`--metrics NAME [NAME ...]` overrides the config's `evaluation` section. `ssim`
+is not a default — it has no consistent space here (cube-boundary seams depress
+it); use `misfit_inspect` for a viewer-space structural read.
+`DEFAULT_METRICS = ("masked_mae", "masked_mse", "masked_psnr")` is what
+`misfit_train` writes into `config.json`.
 
 ---
 
@@ -381,8 +400,7 @@ source of truth for model architecture. All downstream commands require
   "evaluation": {
     "masked_mae": {},
     "masked_mse": {},
-    "masked_psnr": {},
-    "ssim": {}
+    "masked_psnr": {}
   }
 }
 ```
@@ -586,13 +604,14 @@ misfit/
   models/               MISFITModel base class; SwinMAE (SwinUNETR-V2 + MAE head)
   training/             MAETrainer; optimizer/LR-scheduler registries; training_utils
   loss_functions/       ReconstructionLoss base; masked_mse, masked_l1, normalized_mse
-  metrics/              ReconstructionMetric base; masked_mae, masked_mse, ssim, masked_psnr
+  metrics/              ReconstructionMetric base; masked_mae/mse/psnr (DEFAULT_METRICS) + ssim (opt-in)
   evaluation/           ReconstructionEvaluator; tiled full-volume inference + CSV output
   inference/            InferenceRunners; tiled reconstruct pipeline (pad→tile→stitch)
   embedding/            Embedder; EmbedTrainer; aggregators (mean_pool, attention_pool);
                         objectives (classification, contrastive)
   utils/                console (Rich), io (read/write JSON), progress_bar,
-                        hardware (bf16_supported / resolve_amp / autocast_context)
+                        hardware (bf16_supported / resolve_amp / autocast_context),
+                        normalization (normalize_patchwise / denormalize_patchwise)
 ```
 
 ---
