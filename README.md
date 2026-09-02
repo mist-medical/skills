@@ -44,24 +44,21 @@ From there a skill applies in **two** ways:
 The automatic path is the reason these are skills rather than slash commands: it
 does not require the user to already know the skill exists.
 
-### Migrating from the slash-command layout
-
-These files were previously flat `.md` files intended for `.claude/commands/`.
-If you installed one that way, replace it:
-
-```bash
-rm ~/.claude/commands/mist_expert.md
-cp -r mist-expert ~/.claude/skills/
-```
-
-`/mist-expert` keeps working, and you additionally get automatic loading.
-
 ### Other assistants
 
-The skill body is plain markdown and portable. For Cline, copy `SKILL.md` into
-the project's `.clinerules/` (renaming it after the skill). Note that Cline
-rules are always in context rather than loaded on demand, so install only the
-ones a given project needs.
+The skill body is plain markdown and portable to other coding agents.
+
+- **OpenAI Codex** — Codex uses the same skill format: a directory containing a
+  `SKILL.md` with `name`/`description` frontmatter, loaded on demand. Copy a
+  skill directory into `~/.codex/skills/` (personal) or the project's
+  `.agents/skills/` (shared, version-controlled). Effectively drop-in.
+- **Gemini CLI** — has no on-demand skill format; it loads `GEMINI.md` context
+  files instead. Reference a skill from a `GEMINI.md` (Gemini supports
+  `@`-imports, e.g. `@mist-expert/SKILL.md`) or paste the body in. Like Cline,
+  this is always in context, so install only what a project needs.
+- **Cline** — copy `SKILL.md` into the project's `.clinerules/` (renaming it
+  after the skill). Cline rules are always in context rather than loaded on
+  demand, so install only the ones a given project needs.
 
 ## About MIST
 
