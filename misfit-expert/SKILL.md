@@ -139,10 +139,20 @@ misfit_train --index   /data/index.parquet \
 `--resume` and `--overwrite` are mutually exclusive. If neither is passed and
 `config.json` exists, `misfit_train` refuses to run.
 
-AMP is **BF16-only and always on** during training — there is no `--amp-dtype`
-flag. BF16 has float32's dynamic range, so no GradScaler is used. To turn AMP
-off, set `"amp": false` in `config.json` and restart with `--resume` (requires
-an Ampere+ GPU: A100, H100, RTX 30xx+).
+AMP is **BF16-only** — there is no `--amp-dtype` flag and no fp16/GradScaler
+path (BF16 has float32's dynamic range). It is _requested_ on by default, then
+resolved against the actual hardware by `misfit.utils.hardware.resolve_amp`:
+BF16 needs an Ampere+ GPU (compute capability ≥ 8.0), so pre-Ampere GPUs (V100,
+T4) and CPU fall back to **FP32** with a warning. `misfit_train` resolves once
+(from the default, or from the saved config on `--resume`) and writes the
+effective value into `config.json`. To turn AMP off entirely, set `"amp": false`
+in `config.json` and restart with `--resume`.
+
+**CPU / device path**: `misfit_train` runs on GPU (NCCL) or CPU (gloo);
+`MAETrainer.use_cuda` gates device placement, backend, and cuDNN tuning. CPU
+training works but is very slow — intended for tests and small debug runs, and
+it warns once at startup. `misfit_evaluate` / `misfit_inspect` / `misfit_encode`
+/ `misfit_embed` already accept `--device cpu`.
 
 ### Output structure
 
@@ -422,22 +432,31 @@ is recommended for SwinUNETR-V2 — skipping can cause early instability.
 
 **AMP notes**:
 
-- AMP is BF16-only and always enabled during training
-  (`torch.amp.autocast("cuda", dtype=torch.bfloat16)`). There is no
-  `--amp-dtype` flag and no fp16 path.
-- Requires Ampere+ (A100, H100, RTX 30xx+). BF16 has float32's dynamic range, so
-  no GradScaler is used and the optimizer epsilon is the standard `1e-8`
-  (`tc.NO_AMP_EPS`).
-- Disable by setting `"amp": false` in `config.json` and restarting with
-  `--resume`; the same flag is honored by `misfit_evaluate` and
-  `misfit_inspect`.
+- AMP is BF16-only (`hardware.autocast_context` →
+  `torch.autocast("cuda", dtype=torch.bfloat16)`). There is no `--amp-dtype`
+  flag and no fp16 path.
+- Requested on by default, then resolved by `misfit.utils.hardware.resolve_amp`:
+  BF16 needs compute capability ≥ 8.0 (Ampere+: A100, H100, RTX 30xx+).
+  Pre-Ampere GPUs (V100, T4) and CPU fall back to **FP32** with a `UserWarning`.
+  `resolve_amp` checks the compute capability directly, not
+  `torch.cuda.is_bf16_supported()` (which lies on V100/T4).
+- BF16 has float32's dynamic range, so no GradScaler is used and the optimizer
+  epsilon is the standard `1e-8` (`tc.NO_AMP_EPS`).
+- `misfit_train` resolves once and persists the effective value to
+  `config.json`. `misfit_evaluate` and `misfit_inspect` re-resolve the config
+  value against their own hardware (they may run on a different GPU or CPU).
+- Disable entirely by setting `"amp": false` in `config.json`.
 
 ---
 
 ## Distributed Training
 
 `MAETrainer` reads `RANK`, `LOCAL_RANK`, `WORLD_SIZE` from torchrun environment
-variables. The same class runs on 1 GPU or N×M GPUs.
+variables. The same class runs on 1 GPU or N×M GPUs (NCCL backend), and on 1 or
+N CPU processes (gloo backend) for testing. `MAETrainer.use_cuda`
+(`torch.cuda.is_available()`) selects the device, the process-group backend,
+whether `torch.cuda.set_device` / cuDNN tuning run, and whether DDP gets
+`device_ids`.
 
 ```console
 # Single node, 4 GPUs
@@ -572,7 +591,8 @@ misfit/
   inference/            InferenceRunners; tiled reconstruct pipeline (pad→tile→stitch)
   embedding/            Embedder; EmbedTrainer; aggregators (mean_pool, attention_pool);
                         objectives (classification, contrastive)
-  utils/                console (Rich), io (read/write JSON), progress_bar
+  utils/                console (Rich), io (read/write JSON), progress_bar,
+                        hardware (bf16_supported / resolve_amp / autocast_context)
 ```
 
 ---
