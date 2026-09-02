@@ -60,9 +60,17 @@ The skill body is plain markdown and portable to other coding agents.
   after the skill). Cline rules are always in context rather than loaded on
   demand, so install only the ones a given project needs.
 
-## About MIST
+## About the Tools
 
-[MIST](https://github.com/mist-medical/MIST) is a simple, scalable, end-to-end
-framework for 3D medical image segmentation. It handles everything from raw
-NIfTI files to trained models and evaluated predictions. Full documentation is
-at [mist-medical.readthedocs.io](https://mist-medical.readthedocs.io/).
+- **[MIST][mist-repo]** (Medical Imaging Segmentation Toolkit) — a simple,
+  scalable, end-to-end framework for 3D medical image segmentation, handling
+  everything from raw NIfTI files to trained models and evaluated predictions.
+  Full documentation is at
+  [mist-medical.readthedocs.io](https://mist-medical.readthedocs.io/).
+- **[MISFIT][misfit-repo]** (Medical Imaging Semantic Foundation Toolkit) —
+  pretrains 3D imaging foundation models via masked autoencoding on unlabeled
+  NIfTI files, producing a SwinUNETR-V2 encoder that can transfer into MIST for
+  segmentation fine-tuning.
+- **[mist-autoresearch][autores-repo]** — LLM-driven autoresearch loops built on
+  MIST: proposing and scoring configurations, running the agent loop, and
+  interpreting a sweep's results.
